@@ -1,0 +1,38 @@
+-- A recorded run/trail. Client-generated UUID id, createdAt/updatedAt on every
+-- row, soft delete via deletedAtEpochMs -- see DECISIONS.md, "No backend, no
+-- accounts in v1": this is what keeps sync deferrable without a migration.
+CREATE TABLE trackEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    startedAtEpochMs INTEGER NOT NULL,
+    endedAtEpochMs INTEGER,
+    distanceM REAL NOT NULL,
+    elevationGainM REAL NOT NULL,
+    elevationLossM REAL NOT NULL,
+    createdAtEpochMs INTEGER NOT NULL,
+    updatedAtEpochMs INTEGER NOT NULL,
+    deletedAtEpochMs INTEGER
+);
+
+selectAll:
+SELECT * FROM trackEntity WHERE deletedAtEpochMs IS NULL ORDER BY startedAtEpochMs DESC;
+
+selectById:
+SELECT * FROM trackEntity WHERE id = ?;
+
+insert:
+INSERT INTO trackEntity (
+    id, name, startedAtEpochMs, endedAtEpochMs, distanceM, elevationGainM, elevationLossM,
+    createdAtEpochMs, updatedAtEpochMs, deletedAtEpochMs
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateSummary:
+UPDATE trackEntity
+SET endedAtEpochMs = ?, distanceM = ?, elevationGainM = ?, elevationLossM = ?, updatedAtEpochMs = ?
+WHERE id = ?;
+
+rename:
+UPDATE trackEntity SET name = ?, updatedAtEpochMs = ? WHERE id = ?;
+
+softDelete:
+UPDATE trackEntity SET deletedAtEpochMs = ?, updatedAtEpochMs = ? WHERE id = ?;

@@ -213,3 +213,61 @@ the resulting "cannot be built on this machine" notice.
 won't open a bare directory — there's nothing for it to recognize without a
 `.xcodeproj`/`.xcworkspace`), and embedding the three frameworks into it. See
 `ios/README.md`.
+
+---
+
+## 2026-08-13 — :data layer: schema, repositories, GPX
+
+**Decided:** SQLDelight schema for four tables (`trackEntity`,
+`trackPointEntity`, `peakEntity`, `regionEntity`), repository interfaces
+(`TrackRepository`, `PeakRepository`, `RegionRepository`) with SQLDelight-
+backed implementations, and a hand-rolled GPX reader/writer. All four
+targets (jvm, iosX64/iosArm64/iosSimulatorArm64) configure; jvm is also
+where this module's tests actually run, against an in-memory SQLite
+database via the JDBC driver.
+
+**Schema follows the existing conventions exactly:** client-generated UUID
+ids (`newId()`, `kotlin.uuid.Uuid`), `createdAt`/`updatedAt` on `trackEntity`,
+soft delete via `deletedAtEpochMs` — see "No backend, no accounts in v1".
+`trackPointEntity` has none of that: points are only ever removed as a whole
+with their track, so there's no tombstone case to design for.
+
+**`PeakRepository` returns `:engine`'s own `Peak` type directly**, not a
+`:data`-local copy — the repository's job is the row↔domain mapping (SQL
+columns, comma-joined `aliases`), not introducing a second peak shape callers
+would have to convert between before calling `resolveVisiblePeaks`.
+
+**Region download itself is out of scope here.** `RegionRepository` is only
+the local source of truth for the catalog and "is this region on device" --
+actually fetching DEM tiles and peak data over the network is platform
+networking + CDN work that doesn't belong in this pass. Re-syncing the
+catalog (`upsertMetadata`) is written to preserve an existing download
+state rather than reset it, since a catalog refresh must not silently
+un-download something the user already has.
+
+**GPX is hand-rolled (string template writer, regex-based reader), not a
+multiplatform XML library.** The shape Ridgeline itself needs is small and
+fixed (`trk`/`trkseg`/`trkpt` with `lat`/`lon`/`ele`/`time`), and this avoids
+taking on a new KMP dependency's iOS-compile risk in an environment that
+can't verify iOS compiles at all. Trade-off: no CDATA support, and a
+`<trkpt>` inside a comment would be misread. Real GPX exports (Strava,
+Garmin, OsmAnd) use plain double-quoted attributes and unnested elements, so
+this is judged good enough for v1 import.
+
+**Bug caught by the full multiplatform build, not by `jvmTest` alone:**
+`RegexOption.DOT_MATCHES_ALL` compiles fine for the `jvm()` target but isn't
+part of `kotlin.text`'s *common* API (only the JVM actual adds it), so it
+broke `compileCommonMainKotlinMetadata` -- the compile step that stands in
+for "does this still work on every target," including iOS, on a host that
+can't actually compile iOS. Fixed by matching `[\s\S]` instead of relying on
+a dot-matches-newlines flag. Lesson for future :data/:ui work in this
+sandbox: `./gradlew build` (or at minimum the metadata compile task), not
+just `jvmTest`, is what catches a JVM-only stdlib API slipping into
+commonMain.
+
+**kotlinx-datetime added as a dependency** (the one new external dependency
+in this pass) specifically for ISO-8601 timestamp formatting/parsing at the
+GPX text boundary -- correct date/calendar math by hand was judged more
+error-prone than pulling in the standard, JetBrains-maintained KMP library
+built for exactly this. Everywhere else in `:data`, timestamps stay plain
+epoch-millis `Long`, matching the schema.

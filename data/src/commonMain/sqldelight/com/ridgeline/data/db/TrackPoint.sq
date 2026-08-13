@@ -1,0 +1,26 @@
+-- GPS samples for a track, in recording order. No soft delete: points are
+-- only ever removed as a whole when their track is (see deleteForTrack) --
+-- there's no scenario in v1 where a single point needs to survive tombstoned.
+CREATE TABLE trackPointEntity (
+    trackId TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    latDeg REAL NOT NULL,
+    lonDeg REAL NOT NULL,
+    elevationM REAL NOT NULL,
+    recordedAtEpochMs INTEGER NOT NULL,
+    PRIMARY KEY (trackId, seq),
+    FOREIGN KEY (trackId) REFERENCES trackEntity(id)
+);
+
+selectForTrack:
+SELECT * FROM trackPointEntity WHERE trackId = ? ORDER BY seq ASC;
+
+countForTrack:
+SELECT COUNT(*) FROM trackPointEntity WHERE trackId = ?;
+
+insert:
+INSERT INTO trackPointEntity (trackId, seq, latDeg, lonDeg, elevationM, recordedAtEpochMs)
+VALUES (?, ?, ?, ?, ?, ?);
+
+deleteForTrack:
+DELETE FROM trackPointEntity WHERE trackId = ?;

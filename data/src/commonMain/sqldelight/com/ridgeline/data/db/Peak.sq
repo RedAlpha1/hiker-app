@@ -1,0 +1,25 @@
+-- On-device cache of a region's hand-curated peaks (CLAUDE.md, "Peaks:
+-- hand-curated"). aliases is comma-joined -- peak names/aliases never
+-- contain commas, so this avoids a join table for what's always a short,
+-- immutable list per peak.
+CREATE TABLE peakEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    regionId TEXT NOT NULL,
+    name TEXT NOT NULL,
+    nameLocal TEXT,
+    aliases TEXT NOT NULL,
+    latDeg REAL NOT NULL,
+    lonDeg REAL NOT NULL,
+    elevationM REAL NOT NULL,
+    FOREIGN KEY (regionId) REFERENCES regionEntity(id)
+);
+
+selectForRegion:
+SELECT * FROM peakEntity WHERE regionId = ?;
+
+insert:
+INSERT OR REPLACE INTO peakEntity (id, regionId, name, nameLocal, aliases, latDeg, lonDeg, elevationM)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteForRegion:
+DELETE FROM peakEntity WHERE regionId = ?;

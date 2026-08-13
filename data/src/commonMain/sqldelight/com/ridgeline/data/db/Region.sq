@@ -1,0 +1,32 @@
+-- Catalog of downloadable regions (CLAUDE.md, "Curated regions, not
+-- worldwide"). downloadedAtEpochMs is null until the region tiles + peak
+-- data have actually landed on-device; peakEntity rows only exist for
+-- regions that have been downloaded (see Peak.sq).
+CREATE TABLE regionEntity (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    southDeg REAL NOT NULL,
+    westDeg REAL NOT NULL,
+    northDeg REAL NOT NULL,
+    eastDeg REAL NOT NULL,
+    peakDataVersion TEXT NOT NULL,
+    downloadedAtEpochMs INTEGER,
+    sizeBytes INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM regionEntity;
+
+selectById:
+SELECT * FROM regionEntity WHERE id = ?;
+
+-- Callers that want to preserve an existing download state on re-catalog
+-- should read it first (selectById) and pass it back through here -- see
+-- RegionRepository.upsertMetadata.
+upsertMetadata:
+INSERT OR REPLACE INTO regionEntity (
+    id, name, southDeg, westDeg, northDeg, eastDeg, peakDataVersion, downloadedAtEpochMs, sizeBytes
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+markDownloaded:
+UPDATE regionEntity SET downloadedAtEpochMs = ?, sizeBytes = ? WHERE id = ?;
