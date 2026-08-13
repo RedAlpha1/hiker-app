@@ -385,3 +385,54 @@ before and after every change), but the Android/iOS platform code itself
 (CameraX, MapLibre, AVFoundation, the Kotlin/Native framework Swift import)
 has had zero compiler pass over it. First real build happens on the
 developer's machine.
+
+---
+
+## 2026-08-13 — Start Hike / Start Running: no backend, shared accumulation math
+
+**Decided:** Recording is entirely local, same as everything else in "No
+backend, no accounts in v1" -- a hike/run is on-device GPS fixes going into
+SQLite, with no cross-user or server-trust concern, so a backend would be
+pure cost for nothing this feature needs. Distance/elevation/duration
+accumulation is a new `:engine` type, `RecordingSession` (pure Kotlin,
+JVM-tested, same shape as `resolveVisiblePeaks`/`project`'s split between
+expensive-on-position-change and cheap-per-update work). Location capture
+itself is *not* a KMP `expect`/`actual` -- following the precedent already
+set for camera/map ("Camera preview and map view actuals"), it's plain
+platform code in `:android` (`RecordingService`, a foreground service using
+`android.location.LocationManager`) and `:ios` (`LocationRecorder`, a
+`CLLocationManager` wrapper), both feeding the same shared `RecordingSession`
+and the same `TrackRepository`.
+
+**GPS-only, not Play Services' fused location provider, on Android:** avoids
+a new Play Services dependency, and a provider that can silently prefer a
+network fix is a worse match for CLAUDE.md's offline-first/zero-signal field
+constraint than raw GPS.
+
+**Elevation gain/loss uses a noise threshold** (`RecordingConfig.minElevationDeltaM`,
+default 3m): raw device altitude is noisier than horizontal position, so
+accumulating every fix's raw delta would inflate gain on flat ground. Same
+kind of judgment call as `VisibilityConfig.terrainToleranceM` -- an estimate,
+not a measurement; tune against real device behavior (ideally barometric
+altitude where available) rather than raw GPS altitude, which is a real
+follow-up, not done here.
+
+**Found and fixed a real gap while wiring this up:** `DatabaseDriverFactory`
+had `jvmMain` and `iosMain` actuals but no `androidMain` actual, even though
+`libs.sqldelight.android.driver` was already declared in `data/build.gradle.kts`'s
+conditional Android source set. `:android` had no way to open the database
+at all before this pass -- not something introduced by this feature, but
+something this feature was blocked on until filled in
+(`data/src/androidMain/kotlin/com/ridgeline/data/db/Database.kt`, standard
+`AndroidSqliteDriver` setup).
+
+**Start/End only, no pause, in this pass.** `RecordingSession` itself
+supports `pause()`/`resume()` (tested), but wiring a pause *control* through
+`RecordingService`/`LocationRecorder` -- which have no other command channel
+yet -- is real follow-up work, not something to half-build here.
+
+**Same unverified-in-this-sandbox caveat as every other platform-specific
+entry above:** no Android SDK, no macOS/Xcode host. `RecordingSessionTest`
+(the actual math) is JVM-tested and green; `RecordingService`,
+`RecordingScreen.kt`, `LocationRecorder.swift`, and `RecordingControlsView.swift`
+are standard-boilerplate-shaped but uncompiled here.

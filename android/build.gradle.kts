@@ -56,4 +56,6 @@ dependencies {
     implementation(libs.camerax.view)
 
     implementation(libs.maplibre.android)
+
+    implementation(libs.kotlinx.coroutines.android)
 }

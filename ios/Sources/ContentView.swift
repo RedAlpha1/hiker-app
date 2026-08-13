@@ -13,6 +13,7 @@ import SwiftUI
 /// actuals" for why :ui and this app target aren't connected yet).
 struct ContentView: View {
     @State private var cameraAuthorized = false
+    @StateObject private var recorder = LocationRecorder()
 
     // Same real coordinate GarhwalCheck.kt/ConfidenceCheck.kt use in :engine,
     // and the Android demo (MainActivity.kt) centers its map on too.
@@ -41,6 +42,9 @@ struct ContentView: View {
             .frame(width: 160, height: 200)
             .clipShape(RoundedRectangle(cornerRadius: 12))
             .padding()
+
+            RecordingControlsView(recorder: recorder)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .task {
             await requestCameraAccess()

@@ -8,6 +8,7 @@ androidxCore = "1.15.0"
 androidxComposeBom = "2024.12.01"
 cameraX = "1.4.1"
 maplibreAndroid = "11.8.2"
+kotlinxCoroutines = "1.9.0"
 
 [libraries]
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
@@ -29,6 +30,10 @@ camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "ca
 camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }
 camerax-view = { module = "androidx.camera:camera-view", version.ref = "cameraX" }
 maplibre-android = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibreAndroid" }
+# RecordingService (:android only) exposes live totals as a StateFlow --
+# explicit dependency rather than relying on Compose's transitive coroutines
+# artifact, same "be explicit" convention as kotlinx-datetime in :data.
+kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

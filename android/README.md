@@ -12,6 +12,15 @@ environment that produced it -- first real compile happens on your machine.
 See `DECISIONS.md`, "Camera preview and map view actuals" for the full
 reasoning behind this module's shape.
 
+`RecordingService.kt` and `RecordingScreen.kt` are real functionality, not a
+build/run check like the rest of this module: a foreground service
+(`android.location.LocationManager`, not Play Services) that drives
+"+ Start a hike" / "+ Start a run" end to end -- GPS fixes into `:engine`'s
+`RecordingSession` for the distance/elevation/duration math and `:data`'s
+`TrackRepository` for persistence, with a persistent notification while
+recording. See `DECISIONS.md`, "Start Hike / Start Running: no backend,
+shared accumulation math".
+
 ## Activates automatically in Android Studio
 
 This module -- and `androidTarget()` on `:engine`/`:data` -- only get

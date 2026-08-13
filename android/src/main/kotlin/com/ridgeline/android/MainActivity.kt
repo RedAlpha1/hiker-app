@@ -93,6 +93,8 @@ private fun RidgelineDemoScreen() {
                     .size(width = 160.dp, height = 200.dp)
                     .clip(RoundedCornerShape(12.dp)),
             )
+
+            RecordingHost(modifier = Modifier.align(Alignment.BottomStart))
         }
     }
 }

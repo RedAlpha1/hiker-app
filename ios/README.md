@@ -23,6 +23,15 @@ double-check against current docs if something doesn't compile as-is.
   MapLibre iOS's `MLNMapView`. Third-party framework, added via Swift
   Package Manager (below), also no Kotlin/Native interop -- this is plain
   Swift calling a Swift/Obj-C SDK directly.
+- `Sources/LocationRecorder.swift` -- "Start a hike"/"Start a run": a
+  `CLLocationManager` wrapper that feeds `Engine.RecordingSession` (distance/
+  elevation/duration math) and `Data.TrackRepository` (persistence) on every
+  fix. This one *does* use Kotlin/Native interop, importing both `Engine`
+  and `Data`. Real functionality, not a build/run check like the rest of
+  this demo -- see `DECISIONS.md`, "Start Hike / Start Running: no backend,
+  shared accumulation math".
+- `Sources/RecordingControlsView.swift` -- the SwiftUI buttons/stats driven
+  by `LocationRecorder`, wired into the bottom-left of `ContentView`.
 
 ## Setting up the Xcode project
 
@@ -45,9 +54,17 @@ project file, so this has to be created from Xcode itself.
      required or camera access silently fails; something like "Ridgeline
      uses the camera to identify peaks on the skyline."
    - `Privacy - Location When In Use Usage Description`
-     (`NSLocationWhenInUseUsageDescription`) -- not used by this demo yet,
-     but CLAUDE.md's location expect/actual boundary will need it soon;
-     worth adding now.
+     (`NSLocationWhenInUseUsageDescription`) and `Privacy - Location Always
+     and When In Use Usage Description`
+     (`NSLocationAlwaysAndWhenInUseUsageDescription`) -- both required by
+     `LocationRecorder.swift`'s `requestAlwaysAuthorization()`, since a
+     hike/run keeps recording with the app backgrounded; something like
+     "Ridgeline records your route in the background while you hike or run."
+   - `Privacy - Location Updates Background Mode` -- add `location` under
+     **Signing & Capabilities > Background Modes** (or `UIBackgroundModes`
+     → `location` directly in Info.plist). Without this,
+     `allowsBackgroundLocationUpdates = true` in `LocationRecorder.swift`
+     throws at runtime.
 
 ## Embedding the Kotlin frameworks
 
