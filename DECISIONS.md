@@ -271,3 +271,49 @@ GPX text boundary -- correct date/calendar math by hand was judged more
 error-prone than pulling in the standard, JetBrains-maintained KMP library
 built for exactly this. Everywhere else in `:data`, timestamps stay plain
 epoch-millis `Long`, matching the schema.
+
+---
+
+## 2026-08-13 — :ui screen state from the design file
+
+**Decided:** `:ui` now has design tokens (`Colors`, `Typography`) and plain
+data-class screen state for all seven screens in `Ridgeline_Standalone.html`
+-- Onboarding, Library, AR Viewfinder, Recording, Summary, Detail (Splash
+has no real state, so no class for it). No Compose composables yet.
+
+**What "use this [design file]" means here, precisely:** per the existing
+rule (see "Design file peak data is decorative, not ground truth"), nothing
+from the file's fabricated `PEAKS` array -- names, elevations, distances,
+bearings, `xPct`/`bottomPx` pixel positions -- went into any real code path.
+What *did* get used: colors, type scale, screen layout/structure, component
+shapes, and the state machine each screen's interactive mockup already
+encodes (`arState`, `recState`, `libState`, `obStep`, `endConfirm`,
+`selectedPeakIdx`, etc.) -- all read directly off the markup and JS in the
+file, which is design/UX information, not geodesy.
+
+**`ArViewfinderState` holds `:engine`'s own types directly** --
+`List<PlacedLabel>` and `VisiblePeak?` -- rather than a UI-local copy. This
+is the one screen where engine and screen state are close enough that a
+translation layer would be pure overhead: `layoutLabels()`'s output *is*
+what the AR screen renders. `ArViewfinderStateTest.realEnginePipelineFeeds
+DirectlyIntoScreenState` runs the actual `resolveVisiblePeaks -> project ->
+layoutLabels` pipeline against real Kausani/Garhwal coordinates (the same
+ones GarhwalCheck.kt/ConfidenceCheck.kt use) and checks the result lands in
+`ArViewfinderState` correctly -- proof the wiring holds end to end, not just
+that each piece compiles alone.
+
+**Two screens (Summary, Detail) reference concepts `:data` doesn't persist
+yet:** peak sightings during a track, and timestamped notes. Modeled as
+UI-only types (`PeakSighting`, `TrackNote`) reusing `:engine`'s `Peak`
+rather than inventing a third peak shape. This is a real gap the design
+surfaced, not an oversight -- adding the corresponding tables/repository
+methods to `:data` is follow-up work, tracked here rather than half-built
+into this pass.
+
+**Composables deliberately not written yet.** Screen state compiles and is
+JVM-tested; actual Compose Multiplatform UI would be a bigger step (new
+plugin, new dependency surface) that this environment cannot visually
+verify at all (no emulator, no simulator, no browser preview). Writing a
+large amount of unverifiable rendering code isn't a good trade against that
+risk -- state modeling first, composables as an explicit next step once
+someone can look at the result.
