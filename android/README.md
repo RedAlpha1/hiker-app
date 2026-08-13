@@ -1,11 +1,21 @@
 # :android
 
-A plain Jetpack Compose Android application module: `MainActivity` shows a
+A plain Jetpack Compose Android application module. `MainActivity` drives a
+small in-memory flow: Splash -> Onboarding (first launch only, then never
+again -- tracked in a `SharedPreferences` flag) -> Home. Home is a
 full-screen CameraX preview with a MapLibre map in a corner card, centered
 on Kausani (the same real Garhwal viewpoint `:engine`'s own tests use).
-This proves the two native islands from CLAUDE.md -- camera preview and
-map -- both work, and that `:engine`/`:data` are consumable as Android
+That screen proves the two native islands from CLAUDE.md -- camera preview
+and map -- both work, and that `:engine`/`:data` are consumable as Android
 libraries. It's a build/run check, not the real AR viewfinder screen.
+
+`SplashScreen` and `OnboardingScreen` are real UI, not a demo -- they render
+`:ui`'s `OnboardingState`/`ONBOARDING_STEPS` and design tokens
+(`Colors`/`Typography`) directly, now that `:ui` has an `androidTarget()`
+(see `DECISIONS.md`, ":ui gets androidTarget()"). Only Home is forced
+landscape, and only while it's on screen -- see `DECISIONS.md`, "Splash and
+onboarding screens" for why that's done programmatically rather than in the
+manifest.
 
 **Unverified.** Written without an Android SDK available in the
 environment that produced it -- first real compile happens on your machine.
@@ -14,7 +24,7 @@ reasoning behind this module's shape.
 
 ## Activates automatically in Android Studio
 
-This module -- and `androidTarget()` on `:engine`/`:data` -- only get
+This module -- and `androidTarget()` on `:engine`/`:data`/`:ui` -- only get
 included when an Android SDK is findable (`ANDROID_HOME`/`ANDROID_SDK_ROOT`
 env var, or a `local.properties` at the repo root with `sdk.dir` set).
 Opening this repo in Android Studio writes that file automatically, so
@@ -43,6 +53,10 @@ that's a reasonable thing to revisit. Nothing here forecloses it.
 
 ## Running it
 
-Open the repo root in Android Studio. Grant camera permission when
-prompted. You should see a live camera feed with a small map in the
-bottom-right corner, centered on Kausani, Uttarakhand.
+Open the repo root in Android Studio and run. First launch: a dark splash
+screen, then four onboarding cards (swipe with Continue, or Skip to jump to
+the last one), then Home. Grant camera permission when prompted on Home.
+You should see a live camera feed with a small map in the bottom-right
+corner, centered on Kausani, Uttarakhand. Reinstalling or clearing app data
+resets the onboarding flag, so it shows again; a normal relaunch goes
+straight to Home.

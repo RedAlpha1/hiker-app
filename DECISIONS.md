@@ -385,3 +385,72 @@ before and after every change), but the Android/iOS platform code itself
 (CameraX, MapLibre, AVFoundation, the Kotlin/Native framework Swift import)
 has had zero compiler pass over it. First real build happens on the
 developer's machine.
+
+---
+
+## 2026-08-13 — :ui gets androidTarget()
+
+**Decided:** `:ui`'s `build.gradle.kts` now adds `androidTarget()`
+conditionally, gated exactly like `:engine`/`:data` (see "KMP module
+structure and engine harness" and "Camera preview and map view actuals").
+`:android` now depends on `project(":ui")` and consumes its screen state
+(`OnboardingState`, `ONBOARDING_STEPS`) and design tokens (`Colors`,
+`Typography`) directly instead of duplicating them.
+
+**Why this doesn't reopen the CMP problem:** the previous entry ruled out
+Compose Multiplatform in `:ui` because its *common runtime* has a hard
+transitive dependency on androidx artifacts only published to Google's Maven
+repo, which this sandbox cannot reach for any target. `androidTarget()` by
+itself carries no such dependency -- it's plain Kotlin/Android, the same
+mechanism `:engine` and `:data` already use safely. The two are independent:
+`:ui` can target Android without becoming a Compose Multiplatform module.
+
+**Still unverified in this sandbox** -- no SDK here either, same caveat as
+`:engine`/`:data`'s `android.gradle.kts`. `./gradlew build` was confirmed to
+still pass with the SDK absent (the new `if (hasAndroidSdk)` block never
+evaluates), which is the only thing checkable here.
+
+---
+
+## 2026-08-13 — Splash and onboarding screens
+
+**Decided:** `:android` gets real composables for the first two screens in
+the design file instead of launching straight into the camera/map demo:
+`SplashScreen` (fixed-dwell brand screen, no real init to gate on yet) and
+`OnboardingScreen` (renders `:ui`'s `OnboardingState`/`ONBOARDING_STEPS`).
+`MainActivity` now drives `Splash -> Onboarding (first launch only) -> Home`,
+where Home is the existing camera+map demo screen, renamed in place rather
+than moved. "Onboarding complete" is a single `SharedPreferences` boolean,
+not a `:data` repository -- it's launch-flow state, not a trail/peak/region
+record.
+
+**Icons are standard Material glyphs, not the design file's SVG paths.**
+The design file's onboarding icons (mountain outline, camera, download
+arrow, running figure) are hand-drawn inline SVG with arc commands that
+don't translate cleanly to Compose's `Path` API. Added
+`androidx.compose.material:material-icons-extended` (version-managed by the
+existing `compose-bom`, no new version to track) and used `Terrain`,
+`PhotoCamera`, `CloudDownload`, `DirectionsRun` -- same concepts, standard
+glyphs, no hand-traced Bezier math to get subtly wrong. Colors, layout,
+copy, and the step/skip/dots state machine are still transcribed from the
+design file per the existing rule (see ":ui screen state from the design
+file") -- only the icon *paths* are swapped for a library equivalent.
+
+**The manifest's forced `android:screenOrientation="userLandscape"` came
+off the `<activity>` tag.** It predates this pass and was locking the
+*entire app* to landscape, including these two new portrait screens --
+correct for the demo screen alone (see "AR viewfinder defaults to
+landscape"), wrong for Splash/Onboarding/Library, which stay portrait.
+Landscape is now requested programmatically only while the camera/map demo
+screen is on screen (`ComponentActivity.requestedOrientation`, set on
+entry, reset to `UNSPECIFIED` on exit), with
+`android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"`
+added to the activity so that flip doesn't recreate `MainActivity` and lose
+`RidgelineApp`'s in-memory route/onboarding state. This is a stopgap for a
+single-Activity app with exactly one screen that wants a fixed orientation;
+if more screens end up wanting one, a small `LocalActivity`/orientation
+helper composable would be worth factoring out rather than repeating the
+`DisposableEffect` per screen.
+
+**Unverified in this sandbox**, same as everything else `:android` -- no SDK
+here to compile against.

@@ -22,6 +22,12 @@ androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = 
 androidx-compose-ui = { module = "androidx.compose.ui:ui" }
 androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+# Icon glyphs for onboarding/splash (Terrain, PhotoCamera, CloudDownload,
+# DirectionsRun) -- version-managed by the BOM like the other compose-ui
+# artifacts above, not a literal version. See DECISIONS.md, "Splash and
+# onboarding screens" for why standard Material icons instead of hand-traced
+# SVG paths from the design file.
+androidx-compose-material-icons-extended = { module = "androidx.compose.material:material-icons-extended" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
 camerax-core = { module = "androidx.camera:camera-core", version.ref = "cameraX" }
