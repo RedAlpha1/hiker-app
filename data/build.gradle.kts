@@ -1,6 +1,18 @@
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.sqldelight)
+    // See engine/build.gradle.kts for why this is gated this exact way.
+    if (System.getenv("ANDROID_HOME") != null || System.getenv("ANDROID_SDK_ROOT") != null || File("local.properties").exists()) {
+        id("com.android.library") version "8.7.3" // keep in sync with gradle/libs.versions.toml's "agp" entry
+    }
+}
+
+val hasAndroidSdk = System.getenv("ANDROID_HOME") != null ||
+    System.getenv("ANDROID_SDK_ROOT") != null ||
+    File(rootDir, "local.properties").exists()
+
+if (hasAndroidSdk) {
+    apply(from = "android.gradle.kts")
 }
 
 kotlin {
@@ -10,13 +22,10 @@ kotlin {
         freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 
-    // jvm() until this builds on a machine with the Android SDK — see
-    // DECISIONS.md, "KMP module structure and engine harness". The jvm target
-    // doubles as the only target this repo can actually run repository tests
-    // against right now (in-memory SQLite via the JDBC driver).
+    // jvm() doubles as the only target this repo can actually run repository
+    // tests against right now (in-memory SQLite via the JDBC driver).
     jvm()
 
-    // Disabled (with a warning) on non-macOS hosts, same as :engine.
     listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "Data"
@@ -38,6 +47,13 @@ kotlin {
         }
         iosMain.dependencies {
             implementation(libs.sqldelight.native.driver)
+        }
+        if (hasAndroidSdk) {
+            val androidMain by getting {
+                dependencies {
+                    implementation(libs.sqldelight.android.driver)
+                }
+            }
         }
     }
 }

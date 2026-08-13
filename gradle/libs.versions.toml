@@ -2,13 +2,36 @@
 kotlin = "2.1.0"
 sqldelight = "2.0.2"
 kotlinxDatetime = "0.6.1"
+agp = "8.7.3"
+androidxActivity = "1.9.3"
+androidxCore = "1.15.0"
+androidxComposeBom = "2024.12.01"
+cameraX = "1.4.1"
+maplibreAndroid = "11.8.2"
 
 [libraries]
 sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
 sqldelight-sqlite-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinxDatetime" }
+
+# :android only -- plain Jetpack Compose (androidx.compose), not Compose
+# Multiplatform. See DECISIONS.md, "Camera preview and map view actuals".
+androidx-compose-bom = { module = "androidx.compose:compose-bom", version.ref = "androidxComposeBom" }
+androidx-compose-ui = { module = "androidx.compose.ui:ui" }
+androidx-compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+androidx-compose-material3 = { module = "androidx.compose.material3:material3" }
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivity" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCore" }
+camerax-core = { module = "androidx.camera:camera-core", version.ref = "cameraX" }
+camerax-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "cameraX" }
+camerax-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "cameraX" }
+camerax-view = { module = "androidx.camera:camera-view", version.ref = "cameraX" }
+maplibre-android = { module = "org.maplibre.gl:android-sdk", version.ref = "maplibreAndroid" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

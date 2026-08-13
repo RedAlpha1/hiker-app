@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- CLAUDE.md/DECISIONS.md "Palette": primary blue, matches :ui's design tokens. -->
+    <color name="ic_launcher_background">#1D5FFF</color>
+</resources>

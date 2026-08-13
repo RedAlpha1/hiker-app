@@ -317,3 +317,71 @@ verify at all (no emulator, no simulator, no browser preview). Writing a
 large amount of unverifiable rendering code isn't a good trade against that
 risk -- state modeling first, composables as an explicit next step once
 someone can look at the result.
+
+---
+
+## 2026-08-13 — Camera preview and map view actuals
+
+**Decided:** `:engine` and `:data` get a conditionally-added `androidTarget()`
+(only when an Android SDK is findable). `:android` is a plain Jetpack
+Compose application module (CameraX preview + MapLibre Android SDK map,
+depending on `:engine`/`:data`) rather than Compose Multiplatform code
+shared from `:ui`. iOS gets equivalent SwiftUI/AVFoundation/MapLibre-iOS
+demo code under `ios/Sources/`, importing the Kotlin/Native `Engine`
+framework directly.
+
+**Why `androidTarget()` is conditional, and why that's harder than it looks:**
+the Android Gradle Plugin needs network access (Google's Maven repo, via
+Gradle's `google()`) just to *configure* -- unlike Kotlin/Native's iOS
+targets, which disable themselves gracefully on a non-macOS host, AGP fails
+the build outright without it. This environment's network policy blocks
+`dl.google.com` (and `maven.google.com`, which redirects to it) entirely, so
+AGP cannot be resolved here under any circumstances -- confirmed directly,
+not assumed, before designing around it.
+
+Gradle's Kotlin DSL `plugins {}` block does not see script-level `val`s (a
+`val hasAndroidSdk = ...` computed above it fails with "Unresolved
+reference" *inside* the block -- proven by testing it directly). It does,
+however, accept a literal `if (System.getenv(...) != null || File(...).exists())`
+expression written inline, and correctly skips resolving the plugin when
+that's false. This was verified empirically in this exact sandbox (with and
+without a fake `local.properties` present, run to run) before relying on it
+project-wide -- see `engine/build.gradle.kts`. The same restriction
+(no script-level vals) also blocks referencing AGP's `LibraryExtension`
+type directly in a script where the plugin wasn't applied -- referencing an
+unresolved type is a script *compile* error, independent of any runtime
+`if`. Each module's `android.gradle.kts` sidesteps this by being loaded via
+`apply(from = "android.gradle.kts")`, itself inside the `if` -- a script
+that's never `apply`-ed is never compiled, so the type reference inside it
+never has to resolve when there's no SDK.
+
+**Why `:ui` did *not* get Compose Multiplatform, despite that being
+CLAUDE.md's stated architecture:** tried it, and even the bare minimum
+(`compose.runtime` alone, for the `jvm()` target -- nothing Android-specific)
+fails to resolve, because Compose Multiplatform's common runtime has a
+transitive dependency on `androidx.arch.core:core-common` and
+`androidx.lifecycle:*`, which are *only* ever published to Google's Maven
+repo, for every target, not just Android. Confirmed directly (the build
+failure lists a chain through `org.jetbrains.compose.ui:ui-desktop`, i.e.
+the *desktop/JVM* variant, not anything Android-specific). Adding it would
+have made `:ui` -- including its already-written, already-passing screen
+state tests from the previous session -- permanently unbuildable in this
+environment. Rather than risk that regression for code that couldn't be
+verified either way, camera/map demo screens went into `:android` (plain
+`androidx.compose`, no multiplatform runtime) and plain SwiftUI on iOS
+instead. `:ui`'s screen state is not wired into either demo.
+
+**This is a sandbox-forced deviation, not a recommendation.** On a machine
+with real access to Google's Maven repo, Compose Multiplatform in `:ui`
+would work fine and is the architecture CLAUDE.md actually calls for.
+Revisiting this once there's a working build to verify against is
+reasonable; nothing here should be read as "don't do that."
+
+**Everything platform-specific in this pass is unverified.** No Android SDK,
+no macOS/Xcode host, in the environment that wrote it -- `:engine`'s and
+`:data`'s conditional Android wiring was verified to at least *degrade
+safely* (`./gradlew build` still passes with the SDK absent, confirmed
+before and after every change), but the Android/iOS platform code itself
+(CameraX, MapLibre, AVFoundation, the Kotlin/Native framework Swift import)
+has had zero compiler pass over it. First real build happens on the
+developer's machine.

@@ -5,11 +5,14 @@ plugins {
 kotlin {
     // jvm() until this builds on a machine with the Android SDK — see
     // DECISIONS.md, "KMP module structure and engine harness". Compose
-    // Multiplatform is not applied yet — there are no screens to justify it;
-    // add it alongside androidTarget() once real UI code lands here.
+    // Multiplatform is not applied here -- see DECISIONS.md, "Camera preview
+    // and map view actuals": its common runtime has a hard transitive
+    // dependency on androidx artifacts that only exist on Google's Maven
+    // repo, which this sandbox's network policy blocks for every target,
+    // not just Android. Kept this module Compose-free and fully verifiable
+    // rather than risk breaking its already-tested state classes.
     jvm()
 
-    // Disabled (with a warning) on non-macOS hosts, same as :engine.
     listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
         target.binaries.framework {
             baseName = "UI"
