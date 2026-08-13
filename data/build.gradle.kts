@@ -3,9 +3,17 @@ plugins {
 }
 
 kotlin {
-    // jvm() only until this builds on a machine with the Android SDK / Xcode
-    // — see DECISIONS.md, "KMP module structure and engine harness".
+    // jvm() until this builds on a machine with the Android SDK — see
+    // DECISIONS.md, "KMP module structure and engine harness".
     jvm()
+
+    // Disabled (with a warning) on non-macOS hosts, same as :engine.
+    listOf(iosX64(), iosArm64(), iosSimulatorArm64()).forEach { target ->
+        target.binaries.framework {
+            baseName = "Data"
+            isStatic = true
+        }
+    }
 
     sourceSets {
         commonMain.dependencies {

@@ -184,3 +184,32 @@ alone. `GarhwalCheck.kt` encodes the Kausani-to-Nanda-Devi/Kamet/Shivling
 distances and the 126km curvature drop exactly as given above, since those
 figures are this log's own ground truth. `ConfidenceCheck.kt` covers the
 80km/120km haze thresholds and the HAZY-ranks-below-CLEAR lane rule.
+
+---
+
+## 2026-08-13 — iOS targets added to :engine, :data, :ui
+
+**Decided:** `:engine`, `:data`, and `:ui` each declare `iosX64()`,
+`iosArm64()`, `iosSimulatorArm64()` targets with a static framework
+(`Engine`, `Data`, `UI`).
+
+**Why:** The product is Android and iOS from one shared codebase — that's
+the whole premise (CLAUDE.md, top of file). Declaring the targets now, even
+without a macOS host to compile them on, keeps the module boundaries honest:
+`:engine`, `:data`, and `:ui` are meant to be platform-agnostic Kotlin, and a
+build that can't even *configure* iOS targets would let platform-specific
+assumptions creep in unnoticed.
+
+**Why this is safe in a non-macOS environment:** Kotlin/Native disables
+targets the host can't build, with a warning, rather than failing
+configuration or the build — unlike the Android Gradle Plugin, which needs
+`ANDROID_HOME` just to configure and would break the build outright. That
+asymmetry is why `androidTarget()` is still deliberately not added (see the
+entry above); `iosArm64()` etc. carry no such risk.
+`kotlin.native.ignoreDisabledTargets=true` in `gradle.properties` silences
+the resulting "cannot be built on this machine" notice.
+
+**Still required, on a Mac:** the actual Xcode project under `ios/` (Xcode
+won't open a bare directory — there's nothing for it to recognize without a
+`.xcodeproj`/`.xcworkspace`), and embedding the three frameworks into it. See
+`ios/README.md`.
