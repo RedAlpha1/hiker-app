@@ -12,14 +12,31 @@ environment that produced it -- first real compile happens on your machine.
 See `DECISIONS.md`, "Camera preview and map view actuals" for the full
 reasoning behind this module's shape.
 
-`RecordingService.kt` and `RecordingScreen.kt` are real functionality, not a
-build/run check like the rest of this module: a foreground service
-(`android.location.LocationManager`, not Play Services) that drives
-"+ Start a hike" / "+ Start a run" end to end -- GPS fixes into `:engine`'s
-`RecordingSession` for the distance/elevation/duration math and `:data`'s
+`RecordingService.kt`, `RecordingScreen.kt`, and the live-route drawing in
+`RidgelineMapView.kt` are real functionality, not a build/run check like
+the rest of this module: a foreground service (`android.location.LocationManager`,
+not Play Services) that drives "+ Start a hike" / "+ Start a run" end to
+end -- GPS fixes into `:engine`'s `RecordingSession` for the distance/
+elevation/duration math (including real pause/resume) and `:data`'s
 `TrackRepository` for persistence, with a persistent notification while
-recording. See `DECISIONS.md`, "Start Hike / Start Running: no backend,
-shared accumulation math".
+recording and the actual route drawn live on the map. The stat sheet is
+rebuilt against Screens 5/5b of `Ridgeline_Standalone.html` and renders
+directly from `:ui`'s `RecordingState`/`ActivityType`/`Colors`/`Typography`
+(see "`:ui` gained an `androidTarget()`" below) rather than a parallel
+`:android`-local copy. See `DECISIONS.md`, "Start Hike / Start Running: no
+backend, shared accumulation math" and "...: live map + real UI".
+
+## `:ui` gained an `androidTarget()`
+
+`:ui` already had exactly the state this screen needed
+(`RecordingState`/`ActivityType`, `Colors`, `Typography`) but had no Android
+variant, so `:android` originally hand-duplicated a local enum. `ui/build.gradle.kts`
+now adds `androidTarget()` conditionally, the same `hasAndroidSdk`-gated
+pattern already proven by `:engine`/`:data` (see "Camera preview and map
+view actuals" below) -- `:ui` stays Compose-free, only the target was added.
+`ComposeTheme.kt` in this module is the call site `Colors.kt`/`Typography.kt`'s
+own doc comments point to for converting their plain ARGB `Long`/`TextStyleSpec`
+tokens into `androidx.compose.ui.graphics.Color`/`TextStyle`.
 
 ## Activates automatically in Android Studio
 
@@ -42,8 +59,11 @@ for *every* target, not just Android. Rather than risk breaking `:ui`'s
 already-tested plain-Kotlin state classes by adding a dependency that
 couldn't be verified at all, camera/map living directly in `:android` (and
 in plain SwiftUI on iOS -- see `../ios/README.md`) was the safer call.
-`:ui`'s screen state (`ArViewfinderState` etc.) isn't wired into this demo
-yet as a result -- see `MainActivity.kt`'s doc comment.
+`:ui`'s screen state is still not rendered through Compose Multiplatform as
+a result, but it *is* consumed directly now (`RecordingState`/`ActivityType`
+etc., via the `androidTarget()` added for this -- see above) from plain
+Jetpack Compose; only `ArViewfinderState` and the other not-yet-built
+screens remain unwired.
 
 This is very possibly *not* how the app should look once it has real
 network access to Google's Maven repo (which your machine does) -- if you
@@ -54,4 +74,7 @@ that's a reasonable thing to revisit. Nothing here forecloses it.
 
 Open the repo root in Android Studio. Grant camera permission when
 prompted. You should see a live camera feed with a small map in the
-bottom-right corner, centered on Kausani, Uttarakhand.
+bottom-right corner, centered on Kausani, Uttarakhand, with "+ Start a
+hike"/"+ Start a run" docked at the bottom. Starting one (after granting
+location permission) swaps the camera feed for a full-bleed live map that
+draws your actual GPS track as you move, with the real stat sheet on top.

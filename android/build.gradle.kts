@@ -42,6 +42,7 @@ dependencies {
     // this resolves to their Android variant automatically.
     implementation(project(":engine"))
     implementation(project(":data"))
+    implementation(project(":ui"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

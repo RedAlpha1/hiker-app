@@ -101,3 +101,16 @@ class RecordingSession(private val config: RecordingConfig = RecordingConfig()) 
 
     fun totals(): RecordingTotals = RecordingTotals(distanceM, elevationGainM, elevationLossM, durationMs)
 }
+
+/**
+ * Rough calorie estimate for a run, for the recording sheet's "kcal" stat.
+ * There's no user-weight profile anywhere in this app yet, so a precise
+ * figure would be fake precision -- this uses ~65 kcal/km, a commonly-cited
+ * average for a ~70kg adult running. An estimate, not a measurement, same
+ * spirit as [VisibilityConfig]'s haze thresholds; replace with a real
+ * MET-based calculation once there's a user profile to compute one from.
+ */
+fun estimateRunCaloriesKcal(distanceM: Double): Int {
+    val kcalPerKm = 65.0
+    return ((distanceM / 1000.0) * kcalPerKm).toInt()
+}

@@ -436,3 +436,72 @@ entry above:** no Android SDK, no macOS/Xcode host. `RecordingSessionTest`
 (the actual math) is JVM-tested and green; `RecordingService`,
 `RecordingScreen.kt`, `LocationRecorder.swift`, and `RecordingControlsView.swift`
 are standard-boilerplate-shaped but uncompiled here.
+
+---
+
+## 2026-08-14 — Start Hike / Start Running: live map + real UI
+
+**Decided:** Two follow-ups to the pass above, prompted directly by the
+question "is map integration done" (no, it wasn't) and a request to build
+the real UI against the shared design file.
+
+**Map integration was genuinely missing.** `RidgelineMapView` was a static
+demo map with no way to draw a route. It now takes `routePoints`/
+`currentPosition` and draws the actual recorded track live -- `GeoJsonSource`
++ `LineLayer`/`CircleLayer` on Android, the equivalent `MLNShapeSource` +
+`MLNLineStyleLayer`/`MLNCircleStyleLayer` on iOS (chosen over the older
+`MLNPolyline`/`MLNAnnotation` API specifically so both platforms style the
+route the same way). Used full-bleed behind the recording sheet, replacing
+the camera preview while a recording is active; the small corner-card demo
+usage is untouched.
+
+**Pulled the real Screen 5/5b markup out of `Ridgeline_Standalone.html`**
+(`SCREEN 5 — ACTIVE RECORDING` / `SCREEN 5b — ACTIVE RECORDING (RUN)`)
+rather than guessing at the design. Per the file's own documented
+unreliability (see "Design file peak data is decorative, not ground truth"),
+its illustrated terrain background, numbered peak-sighting markers, and the
+"Weisshorn" name chip are decorative/fabricated and were **not** reproduced
+-- the real map (above) stands in for that background. Everything else --
+status pill, hero distance, the 3-stat grid with per-stat colored top bars
+(confirmed: hike is gain `#295f86`/duration `#1D5FFF`/pace `#4f6b3f`; run is
+pace `#4f6b3f`/duration `#1D5FFF`/kcal `#295f86`, exactly matching
+`RecordingState.kt`'s pre-existing doc comment), the elevation sparkline,
+and the Pause/End button treatment -- was rebuilt to match exactly.
+
+**`:ui` gained a conditional `androidTarget()`**, mirroring `:engine`/`:data`'s
+proven `hasAndroidSdk`-gated pattern exactly (same sidecar `android.gradle.kts`
+shape). `:ui` stays Compose-free -- this only makes its existing plain-Kotlin
+`RecordingState`/`ActivityType`/`Colors`/`Typography` consumable from
+`:android` (and, since `:ui` already declared iOS targets, from `:ios` too,
+via the `UI.framework` that was already being embedded but not yet
+imported). Both platforms now render from the *same* `RecordingState`
+instead of `:android` hand-duplicating a local enum and `:ios` hand-mirroring
+values a second time -- one shared source of truth for the stat-sheet shape.
+`ComposeTheme.kt` (`:android`) / `ColorTheme.swift` (`:ios`) are the ARGB-`Long`
+→ platform-`Color` call sites `Colors.kt`'s own doc comment already asked for.
+
+**Real pause/resume, upgrading the previous pass's deliberate Start/End-only
+scope.** The design's Pause button is central to the screen, and a fake one
+would be worse than not having it. `RecordingService`/`LocationRecorder` now
+route pause/resume through to `RecordingSession.pause()`/`resume()` (already
+implemented and tested) and additionally stop/restart the GPS radio itself
+-- CLAUDE.md's "all-day battery" goal is exactly what a paused radio buys
+back.
+
+**Calorie estimate for the run screen's "kcal" stat:** no user-weight
+profile exists anywhere in this app, so `estimateRunCaloriesKcal` (`:engine`)
+uses a flat ~65 kcal/km average-adult estimate, explicitly commented as an
+estimate pending a real profile -- same framing as `VisibilityConfig`'s haze
+thresholds.
+
+**Still stubbed, on purpose:** the "Peaks" button (peak sightings during a
+track are an existing tracked gap tied to the AR viewfinder screen, itself
+not wired into `:android`/`:ios` yet) and the design's top-right compass/
+layers icon buttons over the map (decorative chrome with no real function
+yet).
+
+**Same unverified-in-this-sandbox caveat as every platform-specific entry
+above:** `./gradlew build` is green (including `:ui`'s new Android target
+configuration and the new calorie-estimate test), but the Android/iOS UI
+and map code itself has had no compiler pass in this sandbox -- first real
+build/visual check happens on the developer's machine.

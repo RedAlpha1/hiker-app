@@ -1,16 +1,16 @@
 import AVFoundation
+import CoreLocation
 import Engine // Kotlin/Native framework built from :engine -- see ios/README.md
 import SwiftUI
 
-/// Minimal proof that the two native islands from CLAUDE.md -- camera
-/// preview and map -- both work, and that the shared :engine framework
-/// links: CameraPreviewView full-bleed, RidgelineMapView centered on
-/// Kausani (the same real Garhwal viewpoint :engine's own tests use, here
-/// as an `Engine.GeoPoint` constructed straight from the Kotlin framework)
-/// in a corner card. This is a build/run check, not the real AR viewfinder
-/// screen -- see :ui's ArViewfinderState for that screen's actual design
-/// (not wired up here; see DECISIONS.md, "Camera preview and map view
-/// actuals" for why :ui and this app target aren't connected yet).
+/// Two states: not recording shows the original build/run check (camera
+/// preview full-bleed + a small corner map, both proving the native islands
+/// from CLAUDE.md work -- see DECISIONS.md, "Camera preview and map view
+/// actuals"), with "+ Start a hike"/"+ Start a run" docked bottom-leading.
+/// Recording replaces that with the real feature: a full-bleed live
+/// `RidgelineMapView` drawing the actual recorded route, with
+/// `RecordingControlsView`'s stat sheet on top -- see DECISIONS.md, "Start
+/// Hike / Start Running: live map + real UI".
 struct ContentView: View {
     @State private var cameraAuthorized = false
     @StateObject private var recorder = LocationRecorder()
@@ -20,8 +20,21 @@ struct ContentView: View {
     private let kausani = GeoPoint(latDeg: 29.8422, lonDeg: 79.6006)
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            if cameraAuthorized {
+        ZStack(alignment: .bottomLeading) {
+            if let data = recorder.liveData {
+                let routeCoordinates = data.routePoints.map {
+                    CLLocationCoordinate2D(latitude: $0.latDeg, longitude: $0.lonDeg)
+                }
+                RidgelineMapView(
+                    centerLatitude: routeCoordinates.first?.latitude ?? kausani.latDeg,
+                    centerLongitude: routeCoordinates.first?.longitude ?? kausani.lonDeg,
+                    zoomLevel: 15,
+                    routeCoordinates: routeCoordinates,
+                    currentCoordinate: routeCoordinates.last,
+                    followCurrentPosition: true
+                )
+                .ignoresSafeArea()
+            } else if cameraAuthorized {
                 CameraPreviewView()
                     .ignoresSafeArea()
             } else {
@@ -34,17 +47,19 @@ struct ContentView: View {
                     )
             }
 
-            RidgelineMapView(
-                centerLatitude: kausani.latDeg,
-                centerLongitude: kausani.lonDeg,
-                zoomLevel: 11
-            )
-            .frame(width: 160, height: 200)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .padding()
+            if recorder.liveData == nil {
+                RidgelineMapView(
+                    centerLatitude: kausani.latDeg,
+                    centerLongitude: kausani.lonDeg,
+                    zoomLevel: 11
+                )
+                .frame(width: 160, height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            }
 
             RecordingControlsView(recorder: recorder)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
         }
         .task {
             await requestCameraAccess()

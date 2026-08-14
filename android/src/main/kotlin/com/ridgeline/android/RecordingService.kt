@@ -22,22 +22,28 @@ import com.ridgeline.data.db.createDatabase
 import com.ridgeline.engine.GeoPoint
 import com.ridgeline.engine.RecordingSample
 import com.ridgeline.engine.RecordingSession
+import com.ridgeline.engine.estimateRunCaloriesKcal
+import com.ridgeline.ui.screens.ActivityType
+import com.ridgeline.ui.screens.RecordingState
+import com.ridgeline.ui.screens.RecordingStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.time.Duration.Companion.milliseconds
 
-enum class ActivityKind { HIKE, RUN }
-
-/** Live totals a UI can collect while [RecordingService] is running. */
-data class RecordingUpdate(
-    val trackId: String,
-    val activityKind: ActivityKind,
-    val distanceM: Double,
-    val elevationGainM: Double,
+/**
+ * Everything the live map, elevation sparkline, and `TrackRepository.finish`
+ * need that isn't part of `:ui`'s [RecordingState] shape -- that type models
+ * the design's stat sheet exactly (which never shows elevation loss or the
+ * route itself), so this stays a separate, :android-local wrapper rather
+ * than growing [RecordingState] beyond what the design actually specifies.
+ */
+data class RecordingLiveData(
+    val trackName: String,
+    val state: RecordingState,
     val elevationLossM: Double,
-    val durationMs: Long,
-    val hasGpsFix: Boolean,
+    val routePoints: List<GeoPoint>,
+    val elevationSamples: List<Double>,
 )
 
 /**
@@ -54,6 +60,10 @@ data class RecordingUpdate(
  * is the whole point, not optional chrome -- it's what keeps the OS from
  * killing GPS updates.
  *
+ * Pause/resume actually stop and restart GPS updates (not just accumulation)
+ * -- CLAUDE.md's "all-day battery" goal is exactly what a paused GPS radio
+ * buys back.
+ *
  * Unverified in this sandbox (no Android SDK) -- see DECISIONS.md, "Camera
  * preview and map view actuals" for the standing caveat on all `:android`
  * platform code.
@@ -64,23 +74,33 @@ class RecordingService : Service() {
         const val EXTRA_TRACK_ID = "trackId"
         const val EXTRA_TRACK_NAME = "trackName"
         const val EXTRA_ACTIVITY_KIND = "activityKind"
+        private const val ACTION_PAUSE = "com.ridgeline.android.action.PAUSE"
+        private const val ACTION_RESUME = "com.ridgeline.android.action.RESUME"
 
         private const val NOTIFICATION_CHANNEL_ID = "recording"
         private const val NOTIFICATION_ID = 1
         private const val MIN_UPDATE_INTERVAL_MS = 3_000L
         private const val MIN_UPDATE_DISTANCE_M = 5f
 
-        private val _updates = MutableStateFlow<RecordingUpdate?>(null)
+        private val _liveData = MutableStateFlow<RecordingLiveData?>(null)
 
-        /** Latest totals for the in-progress recording, or null when nothing is recording. */
-        val updates: StateFlow<RecordingUpdate?> = _updates.asStateFlow()
+        /** Latest state for the in-progress recording, or null when nothing is recording. */
+        val liveData: StateFlow<RecordingLiveData?> = _liveData.asStateFlow()
 
-        fun start(context: Context, trackId: String, trackName: String, activityKind: ActivityKind) {
+        fun start(context: Context, trackId: String, trackName: String, activityType: ActivityType) {
             val intent = Intent(context, RecordingService::class.java)
                 .putExtra(EXTRA_TRACK_ID, trackId)
                 .putExtra(EXTRA_TRACK_NAME, trackName)
-                .putExtra(EXTRA_ACTIVITY_KIND, activityKind.name)
+                .putExtra(EXTRA_ACTIVITY_KIND, activityType.name)
             ContextCompat.startForegroundService(context, intent)
+        }
+
+        fun pause(context: Context) {
+            context.startService(Intent(context, RecordingService::class.java).setAction(ACTION_PAUSE))
+        }
+
+        fun resume(context: Context) {
+            context.startService(Intent(context, RecordingService::class.java).setAction(ACTION_RESUME))
         }
 
         fun stop(context: Context) {
@@ -97,7 +117,10 @@ class RecordingService : Service() {
     private var session = RecordingSession()
     private var trackId: String? = null
     private var trackName: String = ""
-    private var activityKind: ActivityKind = ActivityKind.HIKE
+    private var activityType: ActivityType = ActivityType.HIKE
+    private var hasGpsFix = false
+    private val routePoints = mutableListOf<GeoPoint>()
+    private val elevationSamples = mutableListOf<Double>()
 
     private val locationListener = LocationListener { location -> onLocation(location) }
 
@@ -109,6 +132,21 @@ class RecordingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            ACTION_PAUSE -> {
+                session.pause()
+                runCatching { locationManager.removeUpdates(locationListener) }
+                publishUpdate()
+                return START_STICKY
+            }
+            ACTION_RESUME -> {
+                session.resume()
+                beginLocationUpdates()
+                publishUpdate()
+                return START_STICKY
+            }
+        }
+
         val id = intent?.getStringExtra(EXTRA_TRACK_ID)
         if (id == null) {
             stopSelf()
@@ -120,17 +158,20 @@ class RecordingService : Service() {
 
         trackId = id
         trackName = intent.getStringExtra(EXTRA_TRACK_NAME).orEmpty()
-        activityKind = ActivityKind.valueOf(intent.getStringExtra(EXTRA_ACTIVITY_KIND) ?: ActivityKind.HIKE.name)
+        activityType = ActivityType.valueOf(intent.getStringExtra(EXTRA_ACTIVITY_KIND) ?: ActivityType.HIKE.name)
         session = RecordingSession()
+        hasGpsFix = false
+        routePoints.clear()
+        elevationSamples.clear()
 
-        val notification = buildNotification(hasGpsFix = false)
+        val notification = buildNotification()
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
             notification,
             ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
         )
-        publishUpdate(hasGpsFix = false)
+        publishUpdate()
 
         if (!beginLocationUpdates()) {
             // Permission was revoked between the caller's check and this service starting --
@@ -143,7 +184,7 @@ class RecordingService : Service() {
 
     override fun onDestroy() {
         runCatching { locationManager.removeUpdates(locationListener) }
-        _updates.value = null
+        _liveData.value = null
         super.onDestroy()
     }
 
@@ -164,38 +205,48 @@ class RecordingService : Service() {
     }
 
     private fun onLocation(location: Location) {
-        val id = trackId ?: return
+        if (trackId == null) return
         val recordedAt = location.time
+        val point = GeoPoint(location.latitude, location.longitude)
 
-        session.addSample(
-            RecordingSample(
-                location = GeoPoint(location.latitude, location.longitude),
-                elevationM = location.altitude,
-                timestampMs = recordedAt,
-            ),
-        )
+        session.addSample(RecordingSample(location = point, elevationM = location.altitude, timestampMs = recordedAt))
         trackRepository.appendPoint(
-            trackId = id,
-            location = GeoPoint(location.latitude, location.longitude),
+            trackId = requireNotNull(trackId),
+            location = point,
             elevationM = location.altitude,
             recordedAtEpochMs = recordedAt,
         )
+        routePoints += point
+        elevationSamples += location.altitude
+        hasGpsFix = true
 
-        publishUpdate(hasGpsFix = true)
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(hasGpsFix = true))
+        publishUpdate()
+        notificationManager.notify(NOTIFICATION_ID, buildNotification())
     }
 
-    private fun publishUpdate(hasGpsFix: Boolean) {
-        val id = trackId ?: return
+    private fun publishUpdate() {
+        if (trackId == null) return
         val totals = session.totals()
-        _updates.value = RecordingUpdate(
-            trackId = id,
-            activityKind = activityKind,
-            distanceM = totals.distanceM,
-            elevationGainM = totals.elevationGainM,
+        val status = when {
+            session.isPaused -> RecordingStatus.PAUSED
+            hasGpsFix -> RecordingStatus.RECORDING
+            else -> RecordingStatus.NO_GPS_FIX
+        }
+        val calories = if (activityType == ActivityType.RUN) estimateRunCaloriesKcal(totals.distanceM) else 0
+
+        _liveData.value = RecordingLiveData(
+            trackName = trackName,
+            state = RecordingState(
+                activityType = activityType,
+                status = status,
+                distanceM = totals.distanceM,
+                elevationGainM = totals.elevationGainM,
+                durationMs = totals.durationMs,
+                caloriesKcal = calories,
+            ),
             elevationLossM = totals.elevationLossM,
-            durationMs = totals.durationMs,
-            hasGpsFix = hasGpsFix,
+            routePoints = routePoints.toList(),
+            elevationSamples = elevationSamples.toList(),
         )
     }
 
@@ -208,16 +259,16 @@ class RecordingService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun buildNotification(hasGpsFix: Boolean): Notification {
-        val activityLabel = if (activityKind == ActivityKind.HIKE) "hike" else "run"
+    private fun buildNotification(): Notification {
+        val activityLabel = if (activityType == ActivityType.HIKE) "hike" else "run"
         val totals = session.totals()
         val distanceKm = totals.distanceM / 1000.0
         val minutes = totals.durationMs.milliseconds.inWholeMinutes
 
-        val contentText = if (hasGpsFix) {
-            "%.1f km · %d min".format(distanceKm, minutes)
-        } else {
-            "Waiting for GPS fix…"
+        val contentText = when {
+            session.isPaused -> "Paused · %.1f km".format(distanceKm)
+            hasGpsFix -> "%.1f km · %d min".format(distanceKm, minutes)
+            else -> "Waiting for GPS fix…"
         }
 
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)

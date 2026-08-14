@@ -21,17 +21,23 @@ double-check against current docs if something doesn't compile as-is.
   Kotlin/Native interop involved.
 - `Sources/RidgelineMapView.swift` -- `UIViewRepresentable` wrapping
   MapLibre iOS's `MLNMapView`. Third-party framework, added via Swift
-  Package Manager (below), also no Kotlin/Native interop -- this is plain
-  Swift calling a Swift/Obj-C SDK directly.
+  Package Manager (below). While recording, draws the real recorded route
+  (`MLNShapeSource` + `MLNLineStyleLayer`/`MLNCircleStyleLayer`, updated live)
+  -- see `DECISIONS.md`, "Start Hike / Start Running: live map + real UI".
 - `Sources/LocationRecorder.swift` -- "Start a hike"/"Start a run": a
   `CLLocationManager` wrapper that feeds `Engine.RecordingSession` (distance/
-  elevation/duration math) and `Data.TrackRepository` (persistence) on every
-  fix. This one *does* use Kotlin/Native interop, importing both `Engine`
-  and `Data`. Real functionality, not a build/run check like the rest of
-  this demo -- see `DECISIONS.md`, "Start Hike / Start Running: no backend,
-  shared accumulation math".
-- `Sources/RecordingControlsView.swift` -- the SwiftUI buttons/stats driven
-  by `LocationRecorder`, wired into the bottom-left of `ContentView`.
+  elevation/duration math, including real pause/resume) and
+  `Data.TrackRepository` (persistence) on every fix, publishing `UI.RecordingState`
+  -- the same type `:android` renders from, not a parallel Swift-only shape.
+  Real functionality, not a build/run check like the rest of this demo --
+  see `DECISIONS.md`, "Start Hike / Start Running: no backend, shared
+  accumulation math" and "...: live map + real UI".
+- `Sources/RecordingControlsView.swift` -- the SwiftUI stat sheet driven by
+  `LocationRecorder`, rebuilt against Screens 5/5b of
+  `Ridgeline_Standalone.html`, wired into `ContentView`.
+- `Sources/ColorTheme.swift` -- converts `UI.Colors`' ARGB `Int64` tokens to
+  SwiftUI `Color`, the Swift-side call site `Colors.kt`'s own doc comment
+  points to (mirrors `:android`'s `toComposeColor()`).
 
 ## Setting up the Xcode project
 
@@ -76,10 +82,12 @@ project file, so this has to be created from Xcode itself.
    cd "$SRCROOT/.."
    ./gradlew :engine:embedAndSignAppleFrameworkForXcode :data:embedAndSignAppleFrameworkForXcode :ui:embedAndSignAppleFrameworkForXcode
    ```
-   Only `Engine` is imported by `ContentView.swift` right now; `Data` and
-   `UI` are embedded too since they'll be needed once this demo grows into
-   the real app (see the design-file screen states already sitting in
-   `:ui`).
+   All three frameworks are now actually used: `ContentView.swift` imports
+   `Engine`, and `LocationRecorder.swift`/`RecordingControlsView.swift`/
+   `ColorTheme.swift` import `Data` and `UI` directly -- `UI.RecordingState`/
+   `ActivityType`/`Colors`/`Typography` are the same types `:android` renders
+   from, not a parallel Swift-only copy (see DECISIONS.md, "Start Hike /
+   Start Running: live map + real UI").
 3. Build. Framework search paths are handled automatically by the
    `embedAndSignAppleFrameworkForXcode` task -- if Xcode still can't find the
    framework, check that the target's "Framework Search Paths" includes the

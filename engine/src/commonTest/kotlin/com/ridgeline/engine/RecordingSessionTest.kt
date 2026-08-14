@@ -81,4 +81,11 @@ class RecordingSessionTest {
         assertApprox(200.0, session.totals().distanceM, tolerance = 1.0)
         assertEquals(61_000L, session.totals().durationMs)
     }
+
+    @Test
+    fun estimateRunCaloriesScalesWithDistance() {
+        assertEquals(0, estimateRunCaloriesKcal(0.0))
+        assertEquals(65, estimateRunCaloriesKcal(1_000.0))
+        assertEquals(325, estimateRunCaloriesKcal(5_000.0))
+    }
 }
